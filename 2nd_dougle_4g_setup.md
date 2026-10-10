@@ -1,10 +1,10 @@
-# SIM7600NA-H — Raspberry Pi 5 + Viettel LTE B41 (QMI) + Wi-Fi Hotspot
+# SIM7600NA-H — Raspberry Pi 5 + LTE B41 (QMI) + Wi-Fi Hotspot
 
 > **Phạm vi:** SIMCOM SIM7600NA-H (bản North America), HAT hoặc USB data trên Raspberry Pi 5, Ubuntu 24.04. Đây là **modem 4G LTE Cat 4, không phải 5G NR**.
 >
-> **Đã kiểm chứng tại `ctuav10`:** kết nối Viettel **LTE TDD B41**, QMI/NetworkManager, ping qua `wwan0` thành công và `curl` trả public IP. Tốc độ một lần đo: download **30.39 Mbps**, upload **5.89 Mbps** tới server Singapore, không đại diện cho mọi nơi. Profile hotspot `CTUAV_Hotspot` đã active trong log. **Chưa có kết quả reboot xác nhận tự khởi động.**
+> **Đã kiểm chứng tại `ctuav10`:** kết nối mang **LTE TDD B41**, QMI/NetworkManager, ping qua `wwan0` thành công và `curl` trả public IP. Tốc độ một lần đo: download **30.39 Mbps**, upload **5.89 Mbps** tới server Singapore, không đại diện cho mọi nơi. Profile hotspot `CTUAV_Hotspot` đã active trong log. **Chưa có kết quả reboot xác nhận tự khởi động.**
 >
-> **Cảnh báo băng tần:** SIM7600NA-H hỗ trợ các band FDD Bắc Mỹ (B2/4/5/12/13/14/25/26/66/71) và TDD B41. Không hỗ trợ LTE FDD B1/B3/B8 phổ biến tại Việt Nam. Nó hoạt động ở vị trí thử nghiệm nhờ **LTE B41 của Viettel**; không suy ra phủ sóng B41 toàn quốc. **Không ép sang FDD B4 chỉ để tăng tốc**: đã thử và modem bị `searching`, `detached`, `Network timeout`.
+> **Cảnh báo băng tần:** SIM7600NA-H hỗ trợ các band FDD Bắc Mỹ (B2/4/5/12/13/14/25/26/66/71) và TDD B41. Không hỗ trợ LTE FDD B1/B3/B8 phổ biến tại Việt Nam. Nó hoạt động ở vị trí thử nghiệm nhờ **LTE B41**; không suy ra phủ sóng B41 toàn quốc. **Không ép sang FDD B4 chỉ để tăng tốc**: đã thử và modem bị `searching`, `detached`, `Network timeout`.
 >
 > Hướng dẫn gốc PPP/ECM tham khảo tại [main](https://github.com/bluemoonfake/RaspberryPi-5-setup/blob/main/2nd_dougle_4g_setup.md). Nếu USB có driver `qmi_wwan`, **không** chuyển `AT+CUSBPIDSWITCH`, quay số PPP hay xóa `/etc/resolv.conf`.
 
