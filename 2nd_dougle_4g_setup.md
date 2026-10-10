@@ -1,10 +1,12 @@
-# SIM7600G-H — Raspberry Pi 5 + Wi-Fi Hotspot
+# Hướng dẫn cấu hình 4G LTE SIM7600 trên Raspberry Pi 5
 
-> **Phạm vi:** SIMCOM SIM7600G-H dùng qua USB dongle hoặc HAT có kết nối USB data với Raspberry Pi 5 (Ubuntu 24.04, NetworkManager, ModemManager). SIM7600G-H là modem **4G LTE Cat 4, không phải 5G NR**, dù board mở rộng có thể được quảng cáo là "4G/5G HAT".
+**Model:** SIM7600G-H — USB Dongle hoặc HAT sử dụng kết nối USB data.
+
+> **Hướng dẫn không phụ thuộc nhà mạng:** Cấu hình QMI + NetworkManager, nhập APN phù hợp với SIM và nhà mạng đang sử dụng. SIM7600G-H là modem **4G LTE Cat 4**, không phải 5G NR. Kết nối chỉ thành công khi nhà mạng phủ sóng LTE ở **băng tần modem hỗ trợ**.
 >
-> **Trạng thái kiểm chứng:** Quy trình QMI và chia sẻ hotspot đã chạy thành công trên Pi `ctuav9`, mạng. **Chưa xác nhận reboot thực tế từ log đã cung cấp.**
+> **Kiểm chứng:** USB `1e0e:9001`, `qmi_wwan`/`wwan0` và kết nối dữ liệu qua QMI đã hoạt động trong thử nghiệm thực tế; cần tự kiểm tra ở mạng/địa điểm khác và sau reboot.
 >
-> **Khác với hướng dẫn PPP/ECM gốc:** Nếu USB đang hiển thị `1e0e:9001`, driver `qmi_wwan` và `/dev/cdc-wdm*`, **không** dùng `AT+CUSBPIDSWITCH`, PPP, hay sửa/xóa `/etc/resolv.conf`. Hãy dùng NetworkManager như bên dưới. Bản gốc tham khảo ở nhánh `main` hoặc [KoiN251/rpi5_setup](https://github.com/KoiN251/rpi5_setup/blob/main/2nd_dougle_4g_setup.md).
+> **Khác với PPP/ECM trong hướng dẫn gốc:** nếu USB đã hiển thị `qmi_wwan` và `/dev/cdc-wdm*`, không cần chạy `AT+CUSBPIDSWITCH` hoặc cấu hình PPP, cũng không xóa `/etc/resolv.conf`.
 
 ## 0. Điều kiện đầu vào và đấu nối
 
@@ -34,7 +36,7 @@ mmcli -L
 nmcli device status
 ```
 
-**Kết quả quan sát trên `ctuav9`:** USB `1e0e:9001`, `/dev/ttyUSB0..4`, `qmi_wwan`, `/dev/cdc-wdm0`, `wwan0`, ModemManager báo `SIMCOM_SIM7600G-H`. **Đừng hardcode `cdc-wdm0`** vì chỉ số có thể đổi.
+**Kết quả quan sát trên `Raspberry Pi thử nghiệm`:** USB `1e0e:9001`, `/dev/ttyUSB0..4`, `qmi_wwan`, `/dev/cdc-wdm0`, `wwan0`, ModemManager báo `SIMCOM_SIM7600G-H`. **Đừng hardcode `cdc-wdm0`** vì chỉ số có thể đổi.
 
 ## 2. Kiểm tra AT, SIM và đăng ký mạng LTE
 
@@ -57,135 +59,168 @@ AT+CPSI?
 
 - `AT` trả `OK` và `ATI` trả `SIMCOM_SIM7600G-H` ⇒ UART USB giao tiếp được.
 - `+CPIN: READY` ⇒ SIM sẵn sàng.
-- `+CEREG: 0,1` hoặc `0,5` ⇒ đăng ký LTE; `+COPS: ...,"nha mang",7` ⇒ nhà mạng, LTE.
+- `+CEREG: 0,1` hoặc `0,5` ⇒ đăng ký LTE; `+COPS: ...,"<TEN_NHA_MANG>",7` ⇒ nhà mạng, LTE.
 - `+CGATT: 1` ⇒ đã attach dữ liệu gói; **chưa đủ để kết luận Linux có Internet**.
-- `AT+CPSI?` cho biết LTE band/cell khi firmware hỗ trợ. Log Pi `ctuav9` chưa có CPSI nên **không khẳng định đang dùng B3 hay B41**.
+- `AT+CPSI?` cho biết LTE band/cell khi firmware hỗ trợ. Log Pi `Raspberry Pi thử nghiệm` chưa có CPSI nên **không khẳng định đang dùng B3 hay B41**.
 
 Thoát minicom: **Ctrl+A**, sau đó **X**. Nếu bị báo cổng bận, đóng minicom rồi mới dùng ModemManager.
 
-## 3. Tạo kết nối Internet bằng QMI
+## 3. Kết nối Internet qua QMI + NetworkManager (không cố định nhà mạng)
 
-Kiểm tra modem đã được quản lý:
+**Chọn nhà mạng tùy ý có hỗ trợ SIM7600 tại khu vực sử dụng.** Điều kiện bắt buộc: SIM còn dịch vụ dữ liệu, trạm LTE hỗ trợ **ít nhất một băng tần của đúng model modem**, và APN chính xác. Không có một APN áp dụng chung cho tất cả nhà mạng.
+
+Kiểm tra modem và các profile đang có:
 
 ```bash
 mmcli -m 0
+nmcli -f NAME,TYPE,DEVICE connection show
 nmcli device status
 ```
 
-Trong ví dụ này, profile được đặt tên đúng theo Pi đã sử dụng: `CTUAV_computer`. Chỉ **tạo mới nếu chưa tồn tại**, tránh tạo profile trùng:
+**Chỉ dùng một tên profile 4G thống nhất:** `SIM7600_4G` trên cả hai model. Nếu Pi đã có profile GSM từ lần cấu hình trước, **đổi tên profile hiện hữu** thành `SIM7600_4G` (thay `<TEN_PROFILE_4G_CU>` bằng tên thấy trong danh sách), không tạo profile trùng:
 
 ```bash
-nmcli connection show CTUAV_computer
-# Nếu báo "unknown connection" thì mới tạo:
-sudo nmcli connection add type gsm ifname '*' con-name CTUAV_computer apn v-internet
+sudo nmcli connection modify '<TEN_PROFILE_4G_CU>' connection.id SIM7600_4G
 ```
 
-Cấu hình APN/đường đi ưu tiên và tự kết nối:
+Nếu **chưa có profile 4G**, đoạn lệnh sau sẽ tự tạo. **Nhập APN của nhà mạng đang dùng**, tra trong tài liệu SIM, nhà mạng hoặc cấu hình APN của điện thoại. Không nhập tên nhà mạng thay cho APN.
 
 ```bash
-sudo nmcli connection modify CTUAV_computer \
-  gsm.apn v-internet \
-  connection.autoconnect yes \
-  ipv4.route-metric 700 \
-  ipv6.route-metric 700
-sudo nmcli -w 90 connection up CTUAV_computer
+read -r -p 'Nhap APN cua nha mang: ' APN
+if [ -n "$APN" ]; then
+  if ! nmcli -g connection.id connection show SIM7600_4G >/dev/null 2>&1; then
+    sudo nmcli connection add type gsm ifname '*' con-name SIM7600_4G apn "$APN"
+  fi
+  sudo nmcli connection modify SIM7600_4G \
+    gsm.apn "$APN" \
+    connection.autoconnect yes \
+    ipv4.route-metric 700 \
+    ipv6.route-metric 700
+else
+  echo 'APN rong: can nhap APN dung de ket noi.'
+fi
+unset APN
 ```
 
-Kết quả thực tế đã kiểm chứng: `wwan0` có IPv4, `nmcli connection show --active` ghi `CTUAV_computer` trên `cdc-wdm0`; khi Wi-Fi còn hoạt động, default route Wi-Fi metric 600 và 4G metric 700.
+Nếu nhà mạng yêu cầu thêm thông tin xác thực APN (tên người dùng/mật khẩu/PIN), hãy cấu hình tương ứng theo hướng dẫn nhà mạng. Không công khai các thông tin này trong GitHub hoặc lịch sử lệnh.
 
-Kiểm tra **riêng 4G**, không nhầm với Wi-Fi:
+Chỉ khi đã đặt APN, kích hoạt kết nối:
 
 ```bash
+sudo nmcli -w 90 connection up SIM7600_4G
+```
+
+Kiểm tra **đúng kết nối dữ liệu 4G** thay vì vô tình kiểm tra Internet qua Wi-Fi:
+
+```bash
+nmcli connection show --active
 ip -br addr show wwan0
 ip route
 ping -I wwan0 -c 4 8.8.8.8
 curl --interface wwan0 -4 --max-time 15 https://api.ipify.org
 ```
 
-Trên `ctuav9`, `ping -I wwan0` trả 4/4 gói và truy vấn IP public thành công. Địa chỉ IP có thể thay đổi theo phiên; không ghi cố định vào script.
+Nếu modem đã `registered` nhưng không lên mạng, kiểm tra lại APN, gói dữ liệu, cấu hình xác thực và log ModemManager. Chỉ số `/dev/cdc-wdmX` có thể đổi sau reboot; không hardcode `cdc-wdm0` hay `cdc-wdm1`.
 
-## 4. Phát Wi-Fi Hotspot bằng `wlan0` và chia sẻ Internet 4G
+## 4. Phát Wi-Fi Hotspot qua `wlan0` và chia sẻ Internet 4G
 
-> **Cẩn thận:** `wlan0` đang kết nối Wi-Fi khác sẽ bị chuyển sang chế độ AP, khiến SSH qua Wi-Fi cũ bị ngắt. Mạng Wi-Fi mới có thể phát **trước khi** kết nối 4G có Internet.
+> **Cảnh báo:** Khi chuyển `wlan0` từ Wi-Fi client sang Access Point, phiên SSH qua Wi-Fi trước đó có thể bị ngắt. Nên thao tác tại console hoặc có đường truy cập dự phòng.
+
+Kiểm tra card Wi-Fi có chế độ AP:
 
 ```bash
 nmcli -f WIFI-PROPERTIES.AP device show wlan0
-# Phải là: WIFI-PROPERTIES.AP: yes
+# Cần hiển thị: yes
 ```
 
-Tạo hotspot một lần nếu chưa có profile `CTUAV_Hotspot`. Lấy mật khẩu từ terminal (không ghi mật khẩu vào lịch sử Bash):
+**Một bộ tên dùng chung cho hai model:** profile 4G `SIM7600_4G`, profile hotspot `SIM7600_Hotspot`, SSID mặc định `SIM7600-Companion`. Nếu sử dụng nhiều Raspberry Pi cạnh nhau, cần đổi SSID để dễ phân biệt thiết bị.
+
+Kiểm tra các profile hiện có, **đổi tên hotspot cũ nếu cần** (thay tên trong ngoặc nhọn bằng tên profile thực tế):
 
 ```bash
-read -rsp 'Nhap mat khau hotspot (8-63 ky tu): ' HOTSPOT_PSK; echo
-sudo nmcli device wifi hotspot \
-  ifname wlan0 \
-  con-name CTUAV_Hotspot \
-  ssid CTUAV-companion-computer \
-  band bg \
-  password "$HOTSPOT_PSK"
-unset HOTSPOT_PSK
+nmcli -f NAME,TYPE,AUTOCONNECT connection show
+sudo nmcli connection modify '<TEN_HOTSPOT_CU>' connection.id SIM7600_Hotspot
 ```
 
-Nếu profile **đã có**, không tạo lại. Để thay mật khẩu mà không ghi vào lịch sử shell:
+Nếu **chưa có** profile `SIM7600_Hotspot`, tạo với mật khẩu tự chọn (ít nhất 8 ký tự, không ghi vào lịch sử Bash):
 
 ```bash
-read -rsp 'Mat khau hotspot moi: ' HOTSPOT_PSK; echo
-sudo nmcli connection modify CTUAV_Hotspot wifi-sec.key-mgmt wpa-psk wifi-sec.psk "$HOTSPOT_PSK"
-unset HOTSPOT_PSK
-sudo nmcli connection up CTUAV_Hotspot
+if ! nmcli -g connection.id connection show SIM7600_Hotspot >/dev/null 2>&1; then
+  read -rsp 'Nhap mat khau hotspot (8-63 ky tu): ' HOTSPOT_PSK; echo
+  sudo nmcli device wifi hotspot \
+    ifname wlan0 \
+    con-name SIM7600_Hotspot \
+    ssid SIM7600-Companion \
+    band bg \
+    password "$HOTSPOT_PSK"
+  unset HOTSPOT_PSK
+fi
 ```
 
-Đặt IP/gateway cố định và chế độ NAT/DHCP của NetworkManager:
+Đặt IP gateway, bật NAT/DHCP và tự kết nối khi khởi động:
 
 ```bash
-sudo nmcli connection modify CTUAV_Hotspot \
+sudo nmcli connection modify SIM7600_Hotspot \
   ipv4.method shared \
   ipv4.addresses 192.168.50.1/24 \
   ipv6.method disabled \
   connection.autoconnect yes \
   connection.autoconnect-priority 100
-sudo nmcli connection up CTUAV_Hotspot
+sudo nmcli connection modify SIM7600_4G connection.autoconnect yes
+sudo nmcli connection up SIM7600_Hotspot
 ```
 
-Nếu muốn **luôn** bật AP sau reboot, tắt autoconnect của profile Wi-Fi cũ (thay đúng tên hiển thị trên Pi; ví dụ trước đó là `Nam dep trai`):
+Để hotspot ưu tiên sau reboot, **tắt autoconnect của profile Wi-Fi client trước đây** trên `wlan0` nếu có; không xóa Wi-Fi đó. Lấy tên từ `nmcli connection show` và thay `<TEN_WIFI_CU>` bằng tên thật:
 
 ```bash
 nmcli -f NAME,TYPE,AUTOCONNECT connection show
-sudo nmcli connection modify 'Nam dep trai' connection.autoconnect no
+sudo nmcli connection modify '<TEN_WIFI_CU>' connection.autoconnect no
 ```
 
-Không xóa profile Wi-Fi cũ. Nếu Pi không có profile cũ, bỏ qua lệnh trên.
-
-## 5. Kiểm tra sau bật hotspot và sau reboot
+Kiểm tra:
 
 ```bash
 nmcli connection show --active
 ip -br addr show wlan0
 ip -br addr show wwan0
 ip route
-nmcli -f connection.id,connection.autoconnect connection show CTUAV_computer
-nmcli -f connection.id,connection.autoconnect connection show CTUAV_Hotspot
+nmcli -f connection.id,connection.autoconnect connection show SIM7600_Hotspot
+nmcli -f connection.id,connection.autoconnect connection show SIM7600_4G
 ```
 
-Dự kiến: `CTUAV_Hotspot` ở `wlan0` với `192.168.50.1/24`; `CTUAV_computer` ở thiết bị GSM (`cdc-wdmX`); route mặc định qua `wwan0` khi Wi-Fi chỉ phát AP. Từ laptop kết nối hotspot, thử `ssh <user-pi>@192.168.50.1`, ping Internet và kiểm tra DNS.
+Dự kiến `wlan0` nhận IP `192.168.50.1/24`; thiết bị kết nối hotspot có thể truy cập Pi tại `192.168.50.1`. Internet chỉ có khi `SIM7600_4G` đã kết nối và được định tuyến/NAT đúng.
 
-Chỉ reboot khi có khả năng truy cập lại Pi qua hotspot hoặc màn hình:
+Chỉ kiểm tra reboot khi có cách truy cập lại Raspberry Pi:
 
 ```bash
 sudo reboot
 ```
 
-Sau reboot xác nhận cả hotspot **và** dữ liệu 4G tự bật; `autoconnect=yes` là cấu hình dự kiến, không thay thế cho kiểm chứng reboot thực tế.
+Sau khởi động, kiểm tra cả `SIM7600_4G` và `SIM7600_Hotspot` hoạt động. `autoconnect=yes` là cấu hình dự kiến, **không thay thế việc kiểm thử reboot thực tế**.
+
+## 5. Kiểm tra sau khởi động
+
+```bash
+nmcli connection show --active
+nmcli device status
+mmcli -m 0
+ip -br addr show wlan0
+ip -br addr show wwan0
+ip route
+ping -I wwan0 -c 4 8.8.8.8
+```
+
+Xác nhận `SIM7600_Hotspot` ở `wlan0` với gateway `192.168.50.1`, `SIM7600_4G` kết nối modem QMI và máy khách truy cập được Internet. Khi dùng nhiều Pi, đặt SSID khác nhau để tránh nhầm thiết bị.
 
 ## 6. Khắc phục sự cố
 
-| Dấu hiệu | Kiểm tra / xử lý an toàn |
+| Triệu chứng | Hướng xử lý |
 |---|---|
-| Không có `/dev/ttyUSB*` hoặc `/dev/cdc-wdm*` | Kiểm tra nguồn, USB data, `lsusb -t`, `dmesg`; không đổi USB PID khi QMI đã hiện. |
-| `AT` không phản hồi | Xác nhận `/dev/ttyUSB2` đúng AT port bằng `mmcli -m 0`, 115200 baud, đóng chương trình đang giữ cổng. |
-| SIM không đăng ký LTE | `AT+CPIN?`, `AT+CEREG?`, `AT+CPSI?`, anten, sóng Viettel, gói SIM. |
-| `wwan0` có IP nhưng không vào mạng | `ping -I wwan0`, `curl --interface wwan0`, `ip route`, `resolvectl status`; không xóa `/etc/resolv.conf`. |
-| `nmcli connection up` chờ lâu | `sudo nmcli -w 30 connection up CTUAV_computer`; đọc `mmcli -m 0`, `sudo journalctl -u ModemManager -u NetworkManager -n 80 --no-pager`. |
-| Có hotspot nhưng laptop không có Internet | Kiểm tra 4G còn `connected`, default route qua `wwan0`, `ipv4.method shared`, DHCP của client. |
+| Không thấy `/dev/ttyUSB*` hoặc `/dev/cdc-wdm*` | Kiểm tra nguồn, cáp USB data, `lsusb -t`, `dmesg`; không đổi USB PID khi QMI hoạt động. |
+| Modem chưa đăng ký LTE | Xem `AT+CPIN?`, `AT+CEREG?`, `AT+CPSI?`; kiểm tra anten, độ phủ LTE và các band modem hỗ trợ. |
+| Đã đăng ký mạng nhưng không có dữ liệu | Kiểm tra APN của SIM, gói dữ liệu, `AT+CGATT?`, cấu hình xác thực và log. |
+| `nmcli connection up` chờ quá lâu | `sudo nmcli -w 30 connection up SIM7600_4G`, `mmcli -m 0`, `journalctl -u ModemManager -u NetworkManager -n 80 --no-pager`. |
+| `wwan0` có IP nhưng không có Internet | Kiểm tra `ping -I wwan0`, `ip route`, `resolvectl status`; không tùy tiện xóa `/etc/resolv.conf`. |
+| Hotspot có Wi-Fi nhưng không chia sẻ Internet | Kiểm tra 4G connected, NAT qua `ipv4.method shared`, gateway và DHCP client. |
 
-**Lưu ý bảo mật/vận hành:** LTE qua nhà mạng có thể ở sau CGNAT; SSH trực tiếp từ Internet không bảo đảm dùng được. Khi cần truy cập UAV từ xa nên dùng VPN (ví dụ WireGuard/NetBird) hoặc đường truyền tới server chủ động; không công khai dịch vụ điều khiển bay.
+**Bảo mật:** Mạng di động có thể triển khai CGNAT; truy cập SSH trực tiếp từ Internet thường không bảo đảm. Để quản trị thiết bị từ xa, dùng VPN hoặc kết nối chủ động đến server bảo mật.
