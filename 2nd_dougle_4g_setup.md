@@ -1,15 +1,15 @@
-# SIM7600G-H — Raspberry Pi 5 + Viettel 4G (QMI) + Wi-Fi Hotspot
+# SIM7600G-H — Raspberry Pi 5 + Wi-Fi Hotspot
 
 > **Phạm vi:** SIMCOM SIM7600G-H dùng qua USB dongle hoặc HAT có kết nối USB data với Raspberry Pi 5 (Ubuntu 24.04, NetworkManager, ModemManager). SIM7600G-H là modem **4G LTE Cat 4, không phải 5G NR**, dù board mở rộng có thể được quảng cáo là "4G/5G HAT".
 >
-> **Trạng thái kiểm chứng:** Quy trình QMI và chia sẻ hotspot đã chạy thành công trên Pi `ctuav9`, mạng Viettel. **Chưa xác nhận reboot thực tế từ log đã cung cấp.**
+> **Trạng thái kiểm chứng:** Quy trình QMI và chia sẻ hotspot đã chạy thành công trên Pi `ctuav9`, mạng. **Chưa xác nhận reboot thực tế từ log đã cung cấp.**
 >
 > **Khác với hướng dẫn PPP/ECM gốc:** Nếu USB đang hiển thị `1e0e:9001`, driver `qmi_wwan` và `/dev/cdc-wdm*`, **không** dùng `AT+CUSBPIDSWITCH`, PPP, hay sửa/xóa `/etc/resolv.conf`. Hãy dùng NetworkManager như bên dưới. Bản gốc tham khảo ở nhánh `main` hoặc [KoiN251/rpi5_setup](https://github.com/KoiN251/rpi5_setup/blob/main/2nd_dougle_4g_setup.md).
 
 ## 0. Điều kiện đầu vào và đấu nối
 
 - Raspberry Pi 5 có Ubuntu 24.04, quyền `sudo`, kết nối Internet tạm thời để cài gói.
-- SIM Viettel đã kích hoạt dữ liệu; anten LTE kết nối đúng cổng theo nhãn module/HAT.
+- SIM đã kích hoạt dữ liệu; anten LTE kết nối đúng cổng theo nhãn module/HAT.
 - Module/HAT được cấp nguồn đúng yêu cầu phần cứng; nếu là HAT, kiểm tra **cáp USB data**, jumper PWR và dòng cấp nguồn theo đúng phiên bản board. Chỉ gắn HAT vào GPIO chưa chắc đã tạo ra thiết bị USB/QMI.
 - Không chia sẻ ICCID, IMEI, mật khẩu hotspot, token hoặc địa chỉ dịch vụ nội bộ lên repository public.
 - **Nếu đang SSH qua `wlan0`:** bật hotspot sẽ ngắt Wi-Fi đang dùng; thực hiện trên console hoặc chuẩn bị đường truy cập khác.
@@ -57,13 +57,13 @@ AT+CPSI?
 
 - `AT` trả `OK` và `ATI` trả `SIMCOM_SIM7600G-H` ⇒ UART USB giao tiếp được.
 - `+CPIN: READY` ⇒ SIM sẵn sàng.
-- `+CEREG: 0,1` hoặc `0,5` ⇒ đăng ký LTE; `+COPS: ...,"Viettel Viettel",7` ⇒ nhà mạng Viettel, LTE.
+- `+CEREG: 0,1` hoặc `0,5` ⇒ đăng ký LTE; `+COPS: ...,"nha mang",7` ⇒ nhà mạng, LTE.
 - `+CGATT: 1` ⇒ đã attach dữ liệu gói; **chưa đủ để kết luận Linux có Internet**.
 - `AT+CPSI?` cho biết LTE band/cell khi firmware hỗ trợ. Log Pi `ctuav9` chưa có CPSI nên **không khẳng định đang dùng B3 hay B41**.
 
 Thoát minicom: **Ctrl+A**, sau đó **X**. Nếu bị báo cổng bận, đóng minicom rồi mới dùng ModemManager.
 
-## 3. Tạo kết nối Internet Viettel bằng QMI
+## 3. Tạo kết nối Internet bằng QMI
 
 Kiểm tra modem đã được quản lý:
 
